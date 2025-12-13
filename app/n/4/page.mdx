@@ -1,0 +1,223 @@
+export const metadata = {
+  title: 'Diffusion',
+  alternates: {
+    canonical: '/n/3',
+  },
+}; 
+
+# Project 5A: Diffusion
+
+## Part 0
+
+For this part, I chose the following 3 prompts:
+
+1. 'an oil painting of a snowy mountain village'
+2. 'a man wearing a hat'
+3. 'a pencil'
+
+Here are the generated images using `num_inference_steps = 20` for stage 1:
+
+![](/diffusion/1.png)
+'an oil painting of a snowy mountain village'
+
+![](/diffusion/2.png)
+'a man wearing a hat'
+
+![](/diffusion/3.png)
+'a pencil'
+
+Here are the generated images using `num_inference_steps = 4` for stage 1:
+
+![](/diffusion/4.png)
+'an oil painting of a snowy mountain village'
+
+![](/diffusion/5.png)
+'a man wearing a hat'
+
+![](/diffusion/6.png)
+'a pencil'
+
+As expected, the images have not fully denoised, but all images have definitely stepped well into the direction of their captions.
+
+I used a random seed of `100`.
+
+## Part 1
+
+### 1.1
+
+The forward process is the process of generating the noisy image at timestep t by adding the appropriate amount of noise to the clean image. The coefficient of the amount of noise to add follows a cosine scheduler as t increases.
+
+In this model, t is discrete, from 0 to 999.
+
+Here is the Campanile at noise levels 250, 500, and 750.
+
+![](/diffusion/7.png)
+![](/diffusion/8.png)
+![](/diffusion/9.png)
+
+### 1.2
+
+Given a noisy image, we want to find a way to denoise it. A classical approach is Gaussian denoising. To remove more noise, i.e. perform more smoothing, we should increase the kernel size and sigma. I increased `kernel_size` and `sigma` for high timesteps.
+
+**250:**
+![](/diffusion/7.png)
+![](/diffusion/10.png)
+
+**500:**
+![](/diffusion/8.png)
+![](/diffusion/11.png)
+
+**750:**
+![](/diffusion/9.png)
+![](/diffusion/12.png)
+
+The results aren't great, motivating the use of a neural diffusion model to do the denoising instead.
+
+### 1.3
+
+Now we use the pre-trained U-Net to do the denoising process. The U-Net in stage 1 takes in the noisy image, t, and prompt embeds and returns an estimate of the noise that was added with respect to the clean image.
+
+Thus we can try to reconstruct the original image by subtracting the noise estimate (scaled by the coefficient).
+
+Here are the triples (original image, noisy image at timestep t, estimate of original image) at t=250,500,750.
+
+![](/diffusion/13.png)
+
+![](/diffusion/14.png)
+
+![](/diffusion/15.png)
+
+### 1.4
+
+As we see, the diffusion model is much better at denoising than Gaussian denoising, but still struggles to denoise the very noisy image at t=750.
+
+In practice, the problem is solved by denoising iteratively; denoising in small manageable steps instead of taking large unstable leaps.
+
+I created a strided_timesteps variable to model these manageable steps.
+
+Here is the Campanile at every 5th loop of denoising:
+
+![](/diffusion/40.png)
+
+As we see the image gets less and less noisy.
+
+Here are the results for iterative denoise, one step denoise, and gaussian noise, respectively:
+
+![](/diffusion/37.png)
+![](/diffusion/38.png)
+![](/diffusion/39.png)
+
+As we see, iterative denoise maintains the most detail and looks the best.
+
+### 1.5
+
+Now, we can generate images by starting with pure Gaussian noise, and applying iterative denoising. We use the arbitrary prompt "a high quality photo":
+
+![](/diffusion/41.png)
+
+These don't look bad, but still have noticeable inconsistencies.
+
+### 1.6
+
+Classifier Free Guidance (CFG) is a technique to improve image quality by combining both the conditional and unconditional noise estimates. The parameter gamma controls the strength of CFG.
+
+Here are 5 examples with CFG applied:
+
+![](/diffusion/42.png)
+
+These results look much more realistic and high quality compared to the previous result.
+
+### 1.7
+
+We do image-to-image translation by taking a clean image, adding noise to it, and then denoise it.
+
+The core idea is that by adding a specific amount of noise to a real image, we effectively "nudge" it off the manifold of natural images into a state where the model can creatively reconstruct its details. As the denoising process forces the image back onto that manifold, lower initial noise levels preserve the original structure while higher noise levels allow the model to make up entirely new features.
+
+Here is the Campanile and 2 other pictures:
+
+Original images:
+
+![](/diffusion/campanile.jpg)
+
+![](/diffusion/2.png)
+
+![](/diffusion/3.png)
+
+Recovery:
+
+![](/diffusion/43.png)
+
+![](/diffusion/44.png)
+
+![](/diffusion/45.png)
+
+### 1.7.1
+
+We can perform this process on hand-drawn and unrealistic images as well, which don't lie in the manifold of natural images:
+
+Original images:
+
+![](/diffusion/49.png)
+
+![](/diffusion/50.png)
+
+![](/diffusion/51.png)
+
+Recovery:
+
+![](/diffusion/47.png)
+
+![](/diffusion/46.png)
+
+![](/diffusion/48.png)
+
+### 1.7.2
+
+Impainting refers to the process of generating in a masked region. The image outside the mask remains unchanged. Here are a few examples:
+
+**Campanile:**
+
+![](/diffusion/campanile.jpg)
+Original image
+
+![](/diffusion/c-mask.png)
+mask
+
+![](/diffusion/replace-c.png)
+replace
+
+![](/diffusion/impainted-c.png)
+impainted
+
+**Man mixed with a high quality photo:**
+
+![](/diffusion/53.png)
+impainted
+
+**Lodge cabin mixed with amalfi coast with upper mask**
+
+![](/diffusion/52.png)
+impainted
+
+### 1.7.3
+
+We can use custom text prompts to condition on for image generation. This allows us to specify the direction that we want an image to go to:
+
+![](/diffusion/54.png)
+Translating Campanile to: a rocket ship
+
+![](/diffusion/55.png)
+an oil painting of a snowy mountain village + man
+
+![](/diffusion/56.png)
+a lithograph of a skull + pencil
+
+### 1.8
+
+We can create visual anagrams by applying the research paper. For example we can generate a picture of a dog and a hipster, or a house and the amalfi coast:
+
+![](/diffusion/57.png)
+
+![](/diffusion/58.png)
+
+### 1.9

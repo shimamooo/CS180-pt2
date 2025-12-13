@@ -1,0 +1,114 @@
+export const metadata = {
+  title: 'Diffusion',
+  alternates: {
+    canonical: '/n/3',
+  },
+}; 
+
+# Project 5B: Diffusion
+
+## Part 1
+
+### 1.1
+
+Here, we train a single-step denoising U-Net. Given a noisy image z, we want the decoder to output a clean image x.
+
+Our training objective is a single L2 loss over the true image and the model's attempt at denoising the image.
+
+The architecture is a U-Net composing many Convolution, Pooling, and Upsampling/Downsampling layers.
+
+### 1.2
+
+To train the denoiser, we need to collect a large sample of (z, x) pairs. The noising process is simply adding some Gaussian noise to the original image with noise coefficient sigma between 0.0 and 1.0.
+
+Here is the noising process over various values between 0.0 and 1.0. As sigma increases, the images get noisier:
+
+![](/diffusion/16.png)
+
+### 1.2.1
+
+Now we train the model. We create a dataset with the noisy clean image pairs, UNet architecture, Adam optimizer, and train for 5 epochs.
+
+Here is thee training loss curve:
+
+![](/diffusion/17.png)
+
+Here are 3 sample results on the test set with noise level 0.5 at the 1st and 5th epoch:
+
+![](/diffusion/18.png)
+![](/diffusion/19.png)
+
+### 1.2.2
+
+We examine what occurs when we feed data to the model that the model wasn't initially trained for. Recall from above that we only trained on images with noise coefficient 0.5. We test the model's performance on varying levels of noise, not just 0.5:
+
+![](/diffusion/20.png)
+
+As expected, the model performs quite poorly on extremely noisy images it wasn't trained to handle.
+
+### 1.2.3
+
+To be able to generate new images, we need to be able to denoise pure noise. Instead of a perturbed image, we now input pure noise into the training process and create a new model.
+
+Immediately, the training loss curve doesn't look too promising:
+
+![](/diffusion/21.png)
+
+Here are some sample model outputs at epoch 0 and epoch 5:
+
+![](/diffusion/22.png)
+![](/diffusion/23.png)
+
+The model isn't learning. To minimize expected loss, it just predicts the average of all of the digits.
+
+## Part 2
+
+Motivated to try another approach after our previous failure, we decide to train a Flow Matching model to iteratively denoise the image. As we saw from Part A, iterative denoising is more manageable to learn. Flow Matching provides a different objective by modeling the flow, intuitively the velocity of the vector field of the position of the image at time t.
+
+### 2.1
+
+I implemented a modified U-Net architecture that does time-conditioning using special FCBlocks. This is necessary to use the timestep in the iterative denoising process.
+
+### 2.2
+
+We will create a new MNIST dataset to train the model. Below is the loss curve for 
+
+![](/diffusion/24.png)
+
+### 2.3
+
+Now, we will sample from the time-conditioned U-Net at various epochs of training. Starting from noise, the flow matching model iteratively predicts the flow. Then, the image is updated and the process is repeated. Below are a few samples at Epoch 1, 5, and 10:
+
+![](/diffusion/25.png)
+![](/diffusion/26.png)
+![](/diffusion/27.png)
+
+### 2.4
+
+We want to guide the model in the direction of image generation. For example, we want to specify that we want to generate a 1 versus generating a 9. To do this, we add class conditioning to the U-Net. We add a few more FCBlocks that take in the class information and also add dropout to help regularization.
+
+### 2.5
+
+Now we train the class-conditioned U-Net using standard hyperparamenters. Below is the training loss curve:
+
+![](/diffusion/32.png)
+
+### 2.6
+
+Like 2.3, we sample from the class-conditioned U-Net with CFG. Below are the results after 1, 5, and 10 epochs:
+
+![](/diffusion/29.png)
+
+![](/diffusion/30.png)
+
+![](/diffusion/31.png)
+
+I experimented with removing the learning rate scheduler altogether. To compensate, I lowered the learning rate from 1e-2 to 1e-4 and obtain satisfactory results:
+
+![](/diffusion/33.png)
+![](/diffusion/34.png)
+![](/diffusion/35.png)
+
+Along with the loss for this model:
+
+![](/diffusion/36.png)
